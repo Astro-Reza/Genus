@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Settings UI</title>
+    <style>
+        :root {
+            --primary-blue: #2A5A8D;
+            --text-dark: #222;
+            --input-grey: #D8D8D8;
+            --active-green: #00FF33;
+            --inactive-red: #FF3333;
+            --text-white: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #ffffff;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        hr.divider {
+            border: 0;
+            height: 2px;
+            background-color: #999;
+            margin-bottom: 15px;
+        }
+
+        h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        /* Card Styling */
+        .card {
+            background-color: var(--primary-blue);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* Card Header with Toggle */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            color: var(--text-white);
+            font-size: 20px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        /* Status Buttons */
+        .status-btn {
+            border: none;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            min-width: 70px;
+            text-align: center;
+            color: #333;
+        }
+
+        .status-btn.active, .status-btn.lock {
+            background-color: var(--active-green);
+        }
+
+        .status-btn.inactive, .status-btn.search {
+            background-color: var(--inactive-red);
+            color: white;
+        }
+
+        /* Inputs and Forms */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        select {
+            appearance: none;
+            width: 100%;
+            background-color: var(--input-grey);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 16px;
+            color: #555;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        /* For custom dropdown arrow removal/replacement if needed, 
+           but simple styling keeps it close to the grey bar look */
+        
+        .axis-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .axis-label {
+            color: var(--text-white);
+            font-weight: 800;
+            font-size: 20px;
+            width: 20px;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            background-color: var(--input-grey);
+            border: none;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        /* Remove encoder content margin since it's just header */
+        .card.encoder .card-header {
+            margin-bottom: 0;
+            border-bottom: none; 
+            /* Note: The image has a line, but typically "just status" cards 
+               look cleaner without extra space. I will keep the border based on the image style. */
+            border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+            padding-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>DEVELOPER SETTINGS</h1>
+        <hr class="divider">
+        <h2>AUTO POINTING</h2>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">GPS</span>
+                <button class="status-btn active" onclick="toggleActive(this)">ACTIVE</button>
+            </div>
+            <div class="input-group">
+                <select>
+                    <option value="" disabled selected>Choose City</option>
+                    <option value="Jakarta">Jakarta</option>
+                    <option value="Kuala Lumpur">Kuala Lumpur</option>
+                    <option value="Singapore">Singapore</option>
+                    <option value="Balikpapan">Balikpapan</option>
+                    <option value="Bandung">Bandung</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">AHRS</span>
+                <button class="status-btn active" onclick="toggleActive(this)">ACTIVE</button>
+            </div>
+            <div class="input-group">
+                <div class="axis-row">
+                    <span class="axis-label">X</span>
+                    <input type="text" placeholder="">
+                </div>
+                <div class="axis-row">
+                    <span class="axis-label">Y</span>
+                    <input type="text" placeholder="">
+                </div>
+                <div class="axis-row">
+                    <span class="axis-label">Z</span>
+                    <input type="text" placeholder="">
+                </div>
+            </div>
+        </div>
+
+        <div class="card encoder">
+            <div class="card-header">
+                <span class="card-title">ENCODER</span>
+                <button class="status-btn active" onclick="toggleActive(this)">ACTIVE</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="margin-bottom: 0;">
+                <span class="card-title">STATUS</span>
+                <button class="status-btn lock" onclick="toggleStatus(this)">LOCK</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Function for standard Active/Not Active toggles
+        function toggleActive(btn) {
+            if (btn.classList.contains('active')) {
+                // Switch to Inactive
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+                btn.innerText = "NOT ACTIVE";
+            } else {
+                // Switch to Active
+                btn.classList.remove('inactive');
+                btn.classList.add('active');
+                btn.innerText = "ACTIVE";
+            }
+        }
+
+        // Function specifically for the Lock/Search toggle
+        function toggleStatus(btn) {
+            if (btn.classList.contains('lock')) {
+                // Switch to Search
+                btn.classList.remove('lock');
+                btn.classList.add('search');
+                btn.innerText = "SEARCH";
+            } else {
+                // Switch to Lock
+                btn.classList.remove('search');
+                btn.classList.add('lock');
+                btn.innerText = "LOCK";
+            }
+        }
+    </script>
+</body>
+</html>

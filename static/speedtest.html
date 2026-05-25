@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROTATOR CTRL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;700&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --bg2:      #111418;
+    --bg3:      #181d22;
+    --border:   #252b32;
+    --border2:  #303840;
+    --green:    #00e676;
+    --green-d:  #00c853;
+    --green-dim:#004d20;
+    --amber:    #ffab00;
+    --amber-d:  #ff8f00;
+    --amber-dim:#3d2600;
+    --red:      #ff1744;
+    --red-dim:  #3d0010;
+    --blue:     #40c4ff;
+    --blue-dim: #00334d;
+    --text:     #c8d0d8;
+    --text-dim: #5a6470;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'Barlow', sans-serif;
+    --cond:     'Barlow Condensed', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Scanline overlay ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+    pointer-events: none;
+  }
+
+  /* ─── Header ─── */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--cond);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--green);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .status-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    border: 1px solid;
+    letter-spacing: .06em;
+  }
+  .status-ok  { color: var(--green); border-color: var(--green-dim); background: var(--green-dim); }
+  .status-err { color: var(--red);   border-color: var(--red-dim);   background: var(--red-dim); }
+
+  /* ─── Main grid ─── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    grid-template-rows: auto auto auto;
+    gap: 1px;
+    background: var(--border);
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ─── Panel base ─── */
+  .panel {
+    background: var(--bg2);
+    padding: 1.25rem 1.5rem;
+  }
+  .panel-title {
+    font-family: var(--cond);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--border);
+  }
+
+  /* ─── Speed sliders ─── */
+  .speed-section { grid-column: 1; grid-row: 1; }
+
+  .axis-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 56px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1rem;
+  }
+  .axis-label {
+    font-family: var(--cond);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    color: var(--text-dim);
+  }
+  .axis-label span {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    opacity: .5;
+    margin-top: 2px;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range].az  { background: linear-gradient(to right, var(--green) 0%, var(--green) var(--pct,0%), var(--bg3) var(--pct,0%)); }
+  input[type=range].el  { background: linear-gradient(to right, var(--amber) 0%, var(--amber) var(--pct,0%), var(--bg3) var(--pct,0%)); }
+  input[type=range].pol { background: linear-gradient(to right, var(--blue)  0%, var(--blue)  var(--pct,0%), var(--bg3) var(--pct,0%)); }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    cursor: pointer;
+  }
+  input[type=range].az::-webkit-slider-thumb  { background: var(--green); }
+  input[type=range].el::-webkit-slider-thumb  { background: var(--amber); }
+  input[type=range].pol::-webkit-slider-thumb { background: var(--blue); }
+
+  .spd-val {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 400;
+    text-align: right;
+  }
+  .spd-val.az  { color: var(--green); }
+  .spd-val.el  { color: var(--amber); }
+  .spd-val.pol { color: var(--blue); }
+
+  /* ─── Resolution ─── */
+  .res-section { grid-column: 1; grid-row: 2; border-top: 1px solid var(--border); }
+
+  .res-grid {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .res-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text-dim);
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: .04em;
+    transition: all .15s;
+  }
+  .res-btn:hover { border-color: var(--green); color: var(--text); }
+  .res-btn.active {
+    border-color: var(--green);
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  /* ─── D-pad section ─── */
+  .dpad-section {
+    grid-column: 1; grid-row: 3;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap;
+  }
+
+  .dpad-group { flex-shrink: 0; }
+  .dpad-group-label {
+    font-family: var(--cond);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 4px;
+  }
+  .dpad-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    color: var(--text-dim);
+    user-select: none;
+    transition: background .1s, border-color .1s, color .1s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  .dpad-btn:active, .dpad-btn.pressed {
+    background: var(--green-dim);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .dpad-btn.pol-btn:active, .dpad-btn.pol-btn.pressed {
+    background: var(--blue-dim);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+  .dpad-center {
+    background: var(--border);
+    cursor: default;
+    border-radius: 4px;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    grid-column: 2;
+    grid-row: 1 / 4;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 1px;
+  }
+
+  .sidebar-panel {
+    background: var(--bg2);
+    padding: 1.25rem 1.25rem;
+  }
+
+  /* ─── Emergency stop ─── */
+  .estop-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--red-dim);
+    border: 2px solid var(--red);
+    border-radius: 4px;
+    color: var(--red);
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background .15s;
+  }
+  .estop-btn:active { background: #5c0015; }
+
+  /* ─── Telemetry ─── */
+  .tel-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .tel-row:last-child { border-bottom: none; }
+  .tel-key { color: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+  .tel-val { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+  /* ─── Payload display ─── */
+  .payload-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.8;
+    word-break: break-all;
+  }
+  .payload-box .byte { color: var(--green); }
+  .payload-box .byte.active { color: var(--amber); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; }
+    .sidebar { grid-column: 1; grid-row: auto; border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    ROTATOR CTRL
+  </div>
+  <div class="header-right">
+    <div id="spi-badge" class="status-badge status-err">SPI ✕</div>
+    <div id="tx-badge" class="status-badge" style="color:var(--text-dim);border-color:var(--border);background:var(--bg3);">TX: 0</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ─── Speed sliders ─── -->
+  <div class="panel speed-section">
+    <div class="panel-title">Motor speeds</div>
+
+    <div class="axis-row">
+      <div class="axis-label">Azimuth<span>spd_azm</span></div>
+      <input type="range" id="spd_azm" class="az" min="0" max="100" step="1" value="50">
+      <div class="spd-val az" id="val_azm">50</div>
+    </div>
+    <div class="axis-row">
+      <div class="axis-label">Elevation<span>spd_elv</span></div>
+      <input type="range" id="spd_elv" class="el" min="0" max="100" step="1" value="50">
+      <div class="spd-val el" id="val_elv">50</div>
+    </div>
+    <div class="axis-row">
+      <div class="axis-label">Polarization<span>spd_pol</span></div>
+      <input type="range" id="spd_pol" class="pol" min="0" max="100" step="1" value="30">
+      <div class="spd-val pol" id="val_pol">30</div>
+    </div>
+  </div>
+
+  <!-- ─── Resolution ─── -->
+  <div class="panel res-section">
+    <div class="panel-title">Microstepping resolution</div>
+    <div class="res-grid" id="res-group">
+      <button class="res-btn" data-res="full">FULL</button>
+      <button class="res-btn" data-res="half">1/2</button>
+      <button class="res-btn" data-res="quarter">1/4</button>
+      <button class="res-btn" data-res="eighth">1/8</button>
+      <button class="res-btn active" data-res="sixteenth">1/16</button>
+    </div>
+  </div>
+
+  <!-- ─── D-pad ─── -->
+  <div class="panel dpad-section">
+    <!-- Az / El -->
+    <div class="dpad-group">
+      <div class="dpad-group-label">Azimuth / Elevation</div>
+      <div class="dpad">
+        <div></div>
+        <div class="dpad-btn" id="btn-up"    data-cmd="up">▲</div>
+        <div></div>
+        <div class="dpad-btn" id="btn-left"  data-cmd="left">◀</div>
+        <div class="dpad-center"></div>
+        <div class="dpad-btn" id="btn-right" data-cmd="right">▶</div>
+        <div></div>
+        <div class="dpad-btn" id="btn-down"  data-cmd="down">▼</div>
+        <div></div>
+      </div>
+    </div>
+
+    <!-- Polarization -->
+    <div class="dpad-group">
+      <div class="dpad-group-label">Polarization</div>
+      <div class="dpad">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div class="dpad-btn pol-btn" id="btn-pol-left"  data-cmd="pol_left">↺</div>
+        <div class="dpad-center"></div>
+        <div class="dpad-btn pol-btn" id="btn-pol-right" data-cmd="pol_right">↻</div>
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Sidebar ─── -->
+  <div class="sidebar">
+
+    <!-- E-stop -->
+    <div class="sidebar-panel">
+      <button class="estop-btn" id="estop">⬛ E-STOP</button>
+    </div>
+
+    <!-- Telemetry -->
+    <div class="sidebar-panel" style="border-top:1px solid var(--border);">
+      <div class="panel-title">Telemetry</div>
+      <div class="tel-row"><span class="tel-key">SPI</span>       <span class="tel-val" id="tel-spi">—</span></div>
+      <div class="tel-row"><span class="tel-key">TX count</span>  <span class="tel-val" id="tel-tx">—</span></div>
+      <div class="tel-row"><span class="tel-key">TX errors</span> <span class="tel-val" id="tel-err">—</span></div>
+      <div class="tel-row"><span class="tel-key">Rate</span>      <span class="tel-val">20 Hz</span></div>
+    </div>
+
+    <!-- Last payload -->
+    <div class="sidebar-panel" style="border-top:1px solid var(--border); flex:1;">
+      <div class="panel-title">Last SPI frame</div>
+      <div class="payload-box" id="payload-box">—</div>
+      <div style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--text-dim);line-height:1.7;">
+        [Res, AzSpd, ElSpd, PolSpd,<br>Up, Dn, Rt, Lt, PRt, PLt]
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  resolution: 'sixteenth',
+  spd_azm: 50, spd_elv: 50, spd_pol: 30,
+  up: 0, down: 0, right: 0, left: 0, pol_right: 0, pol_left: 0
+};
+
+const dirButtons = ['up','down','right','left','pol_right','pol_left'];
+
+// ─── Send to Flask ─────────────────────────────────────────────────────────
+async function sendCommand(patch) {
+  Object.assign(state, patch);
+  try {
+    await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+  } catch(e) {
+    console.warn('Send failed:', e);
+  }
+}
+
+// ─── Sliders ──────────────────────────────────────────────────────────────────
+['azm','elv','pol'].forEach(axis => {
+  const key   = 'spd_' + axis;
+  const input = document.getElementById(key);
+  const label = document.getElementById('val_' + axis);
+
+  function updateSlider() {
+    const v = +input.value;
+    const pct = v + '%';
+    input.style.setProperty('--pct', pct);
+    label.textContent = v;
+    sendCommand({ [key]: v });
+  }
+
+  input.addEventListener('input', updateSlider);
+  updateSlider(); // init gradient
+});
+
+// ─── Resolution buttons ───────────────────────────────────────────────────────
+document.getElementById('res-group').addEventListener('click', e => {
+  const btn = e.target.closest('.res-btn');
+  if (!btn) return;
+  document.querySelectorAll('.res-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  sendCommand({ resolution: btn.dataset.res });
+});
+
+// ─── Direction buttons (hold to move) ────────────────────────────────────────
+function mapCmd(cmd) {
+  // dataset uses underscore, state keys use underscore too — just ensure mapping
+  return cmd; // already matches: up, down, right, left, pol_right, pol_left
+}
+
+function btnPress(el) {
+  const raw = el.dataset.cmd;
+  const key = mapCmd(raw);
+  el.classList.add('pressed');
+  sendCommand({ [key]: 1 });
+}
+function btnRelease(el) {
+  const key = mapCmd(el.dataset.cmd);
+  el.classList.remove('pressed');
+  sendCommand({ [key]: 0 });
+}
+
+document.querySelectorAll('.dpad-btn').forEach(btn => {
+  btn.addEventListener('mousedown',  () => btnPress(btn));
+  btn.addEventListener('mouseup',    () => btnRelease(btn));
+  btn.addEventListener('mouseleave', () => { if (btn.classList.contains('pressed')) btnRelease(btn); });
+  btn.addEventListener('touchstart', e  => { e.preventDefault(); btnPress(btn); }, { passive: false });
+  btn.addEventListener('touchend',   e  => { e.preventDefault(); btnRelease(btn); }, { passive: false });
+});
+
+// ─── Emergency stop ────────────────────────────────────────────────────────────
+document.getElementById('estop').addEventListener('click', async () => {
+  try {
+    await fetch('/api/stop', { method: 'POST' });
+    // reset local state too
+    dirButtons.forEach(k => state[k] = 0);
+    document.querySelectorAll('.dpad-btn').forEach(b => b.classList.remove('pressed'));
+  } catch(e) { console.warn(e); }
+});
+
+// ─── Telemetry polling ────────────────────────────────────────────────────────
+const RES_MAP = { full:1, half:2, quarter:4, eighth:8, sixteenth:16 };
+
+function renderPayload(payload) {
+  if (!payload || !payload.length) return '—';
+  const labels = ['Res','AzSpd','ElSpd','PolSpd','Up','Dn','Rt','Lt','PRt','PLt'];
+  return payload.map((v, i) => {
+    const active = (i >= 4 && v === 1) ? ' active' : '';
+    return `<span class="byte${active}" title="${labels[i]}">${String(v).padStart(3,' ')}</span>`;
+  }).join(' ');
+}
+
+async function pollTelemetry() {
+  try {
+    const r = await fetch('/api/state');
+    const d = await r.json();
+    const tel = d.telemetry;
+    const ok  = tel.sensor_status_spi;
+
+    document.getElementById('spi-badge').textContent = ok ? 'SPI ✓' : 'SPI ✕';
+    document.getElementById('spi-badge').className   = 'status-badge ' + (ok ? 'status-ok' : 'status-err');
+    document.getElementById('tx-badge').textContent  = 'TX: ' + tel.spi_tx_count;
+    document.getElementById('tel-spi').textContent   = ok ? 'ONLINE' : 'OFFLINE';
+    document.getElementById('tel-tx').textContent    = tel.spi_tx_count;
+    document.getElementById('tel-err').textContent   = tel.spi_errors;
+    document.getElementById('payload-box').innerHTML = renderPayload(tel.last_payload);
+  } catch(_) {}
+}
+
+setInterval(pollTelemetry, 800);
+pollTelemetry();
+</script>
+</body>
+</html>
