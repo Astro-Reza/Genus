@@ -1,5 +1,23 @@
-# Genus Antenna
+# Genus Algorithm
+
+<div align="center">
+  <img width="150px" src="static/img/psn-new-logo.png"/>
+</div>
+
+[![Typing SVG](https://readme-typing-svg.herokuapp.com/?font=Geologica&weight=500&color=F8F9FA&center=true&width=500&height=50&lines=Building+Next-Gen+Hardware;Fusing+Sensor+Data;Adaptive+PID+Control;)](https://git.io/typing-svg)
+
+<p align="center">
+  <a>
+    <img src="https://img.shields.io/badge/Version-2.0.2-darkorange?style=for-the-badge" alt="Version" />
+  </a>
+  <a href="https://www.linkedin.com/in/rezafauzanz/">
+    <img src="https://img.shields.io/badge/PIC -Reza Fauzan-darkblue?style=for-the-badge" alt="Lead" />
+  </a>
+</p>
+
 This codebase contains the software stack for an automated antenna positioner system. The system consists of a master controller (Orange Pi Zero 3) running a Python Flask backend and a slave controller (ESP32) running C++ firmware to directly drive the motors.
+
+Genus Algo introduces highly adaptive sensor fusion algorithm using cascade PID control. Genus uses an adaptive confidence-score based sensor fusion utilizing two different sensors (AHRS and magnetic motor encoder).
 
 ## System Architecture
 
@@ -64,3 +82,6 @@ pip install flask flask-socketio pyserial numpy spidev rtlsdr
 **Firmware (ESP32):**
 Requires the Arduino IDE with the ESP32 Core installed. 
 *Important: You must use **ESP32 Core version 3.0.0 or newer** as this codebase relies on the native `analogWrite()` function.*
+
+## Research by:
+**Reza Fauzan Zulkarnaen** (Physics | Universitas Negeri Jakarta)
