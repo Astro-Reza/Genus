@@ -18,6 +18,14 @@ const int POL_EN = 4;
 const int POL_R_PWM = 2;
 const int POL_L_PWM = 21;
 
+// ================= LIMIT SWITCH PINS =================
+const int LIM_AZI_RIGHT = 32;
+const int LIM_AZI_LEFT  = 33;
+const int LIM_ELE_UP    = 27;
+const int LIM_ELE_DOWN  = 14;
+const int LIM_POL_RIGHT = 34;
+const int LIM_POL_LEFT  = 35;
+
 // SPI SLAVE PINS (VSPI Default)
 const int SPI_CS   = 5;
 const int SPI_CLK  = 18;
@@ -26,10 +34,10 @@ const int SPI_MOSI = 23;
 
 // ================= SPI BUFFERS =================
 
-// We expect 9 bytes: [SpdAz, SpdEl, SpdPol, Up, Dn, Rt, Lt, PRt, PLt]
-#define SPI_BUF_SIZE 9
-WORD_ALIGNED_ATTR char sendbuf[129] = ""; // Buffer for data TO Master (optional)
-WORD_ALIGNED_ATTR char recvbuf[129] = ""; // Buffer for data FROM Master
+// We expect 12 bytes (padded for 32-bit DMA alignment): [SpdAz, SpdEl, SpdPol, Up, Dn, Rt, Lt, PRt, PLt, pad, pad, pad]
+#define SPI_BUF_SIZE 12
+WORD_ALIGNED_ATTR char sendbuf[132] = ""; // Buffer for data TO Master (optional)
+WORD_ALIGNED_ATTR char recvbuf[132] = ""; // Buffer for data FROM Master
 spi_slave_transaction_t t;
 
 // ================= SETUP =================
@@ -38,14 +46,23 @@ void setup() {
     Serial.begin(115200);
     Serial.setTimeout(50);
 
+    // --- LIMIT SWITCH CONFIG ---
+    pinMode(LIM_AZI_RIGHT, INPUT_PULLUP);
+    pinMode(LIM_AZI_LEFT,  INPUT_PULLUP);
+    pinMode(LIM_ELE_UP,    INPUT_PULLUP);
+    pinMode(LIM_ELE_DOWN,  INPUT_PULLUP);
+    // Pins 34 and 35 are input only and do not have internal pullups on ESP32
+    pinMode(LIM_POL_RIGHT, INPUT);
+    pinMode(LIM_POL_LEFT,  INPUT);
+
     // --- MOTOR CONFIG ---
-    pinMode(AZI_EN, OUTPUT); digitalWrite(AZI_EN, HIGH);
+    pinMode(AZI_EN, OUTPUT); digitalWrite(AZI_EN, LOW);
     pinMode(AZI_R_PWM, OUTPUT); pinMode(AZI_L_PWM, OUTPUT);
 
-    pinMode(ELE_EN, OUTPUT); digitalWrite(ELE_EN, HIGH);
+    pinMode(ELE_EN, OUTPUT); digitalWrite(ELE_EN, LOW);
     pinMode(ELE_R_PWM, OUTPUT); pinMode(ELE_L_PWM, OUTPUT);
 
-    pinMode(POL_EN, OUTPUT); digitalWrite(POL_EN, HIGH);
+    pinMode(POL_EN, OUTPUT); digitalWrite(POL_EN, LOW);
     pinMode(POL_R_PWM, OUTPUT); pinMode(POL_L_PWM, OUTPUT);
 
     stopAll();
@@ -104,7 +121,7 @@ void loop() {
     spi_slave_transaction_t* out_trans;
     // ticks_to_wait=0 makes it non-blocking
     if (spi_slave_get_trans_result(VSPI_HOST, &out_trans, 0) == ESP_OK) {
-        if (out_trans->trans_len >= 9 * 8) {
+        if (out_trans->trans_len >= 12 * 8) {
             // ================= DEBUG PRINT: RECEIVED SPI MESSAGE =================
             Serial.print("DEBUG SPI RX (decimal): ");
             for (int i = 0; i < 9; i++) {
@@ -190,43 +207,52 @@ void updateMotors(int s_az, int s_el, int s_pol, int up, int down, int right, in
 
     // --- 2. ELEVATION MOTOR LOGIC ---
     if (up == 1 && down == 0) {
-        analogWrite(ELE_R_PWM, pwm_el);
-        analogWrite(ELE_L_PWM, 0);
+        analogWrite(ELE_EN, pwm_el);
+        digitalWrite(ELE_R_PWM, HIGH);
+        digitalWrite(ELE_L_PWM, LOW);
     } 
     else if (down == 1 && up == 0) {
-        analogWrite(ELE_R_PWM, 0);
-        analogWrite(ELE_L_PWM, pwm_el);
+        analogWrite(ELE_EN, pwm_el);
+        digitalWrite(ELE_R_PWM, LOW);
+        digitalWrite(ELE_L_PWM, HIGH);
     } 
     else {
-        analogWrite(ELE_R_PWM, 0);
-        analogWrite(ELE_L_PWM, 0);
+        analogWrite(ELE_EN, 0);
+        digitalWrite(ELE_R_PWM, LOW);
+        digitalWrite(ELE_L_PWM, LOW);
     }
 
     // --- 3. AZIMUTH MOTOR LOGIC ---
     if (right == 1 && left == 0) {
-        analogWrite(AZI_R_PWM, pwm_az);
-        analogWrite(AZI_L_PWM, 0);
+        analogWrite(AZI_EN, pwm_az);
+        digitalWrite(AZI_R_PWM, HIGH);
+        digitalWrite(AZI_L_PWM, LOW);
     } 
     else if (left == 1 && right == 0) {
-        analogWrite(AZI_R_PWM, 0);
-        analogWrite(AZI_L_PWM, pwm_az);
+        analogWrite(AZI_EN, pwm_az);
+        digitalWrite(AZI_R_PWM, LOW);
+        digitalWrite(AZI_L_PWM, HIGH);
     } 
     else {
-        analogWrite(AZI_R_PWM, 0);
-        analogWrite(AZI_L_PWM, 0);
+        analogWrite(AZI_EN, 0);
+        digitalWrite(AZI_R_PWM, LOW);
+        digitalWrite(AZI_L_PWM, LOW);
     }
 
     // --- 4. POLARIZATION MOTOR LOGIC ---
     if (p_right == 1 && p_left == 0) {
-        analogWrite(POL_R_PWM, pwm_pol);
-        analogWrite(POL_L_PWM, 0);
+        analogWrite(POL_EN, pwm_pol);
+        digitalWrite(POL_R_PWM, HIGH);
+        digitalWrite(POL_L_PWM, LOW);
     } 
     else if (p_left == 1 && p_right == 0) {
-        analogWrite(POL_R_PWM, 0);
-        analogWrite(POL_L_PWM, pwm_pol);
+        analogWrite(POL_EN, pwm_pol);
+        digitalWrite(POL_R_PWM, LOW);
+        digitalWrite(POL_L_PWM, HIGH);
     } 
     else {
-        analogWrite(POL_R_PWM, 0);
-        analogWrite(POL_L_PWM, 0);
+        analogWrite(POL_EN, 0);
+        digitalWrite(POL_R_PWM, LOW);
+        digitalWrite(POL_L_PWM, LOW);
     }
 }

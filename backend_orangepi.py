@@ -919,7 +919,7 @@ class ControlSender:
                     with self.lock:
                         cmd = self.state.copy()
                     
-                    # 2. Build 9-byte payload (matching ESP32 expectations)
+                    # 2. Build 12-byte payload (matching ESP32 expectations + 32-bit DMA alignment)
                     # Clamp values to 0-255 for bytes
                     payload = [
                         max(0, min(100, cmd['spd_azm'])),   # Byte 0: Speed Azimuth (0-100)
@@ -930,7 +930,8 @@ class ControlSender:
                         1 if cmd['right'] else 0,           # Byte 5: Right
                         1 if cmd['left'] else 0,            # Byte 6: Left
                         1 if cmd['pol_right'] else 0,       # Byte 7: Pol Right
-                        1 if cmd['pol_left'] else 0         # Byte 8: Pol Left
+                        1 if cmd['pol_left'] else 0,        # Byte 8: Pol Left
+                        0, 0, 0                             # Bytes 9-11: Padding for ESP32 SPI Slave DMA
                     ]
                     
                     # 3. Send via SPI
