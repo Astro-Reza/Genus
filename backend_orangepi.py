@@ -1,11 +1,13 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 import serial
+import serial.tools.list_ports
 import math
 import time
 import struct
 import threading
 import os
+import glob
 import numpy as np
 import socket
 import re
@@ -63,13 +65,138 @@ telemetry_state = {
 
 state_lock = threading.Lock()
 
+def system_log(msg):
+    print(msg)
+    with state_lock:
+        if telemetry_state.get("log_message") != msg:
+            telemetry_state["log_message"] = msg
+
 # --- Hardware Configuration ---
 GPS_PORT = '/dev/ttyS5'
 GPS_BAUD = 9600
-AHRS_PORT = '/dev/ttyUSB0'
+AHRS_PORT = '/dev/ttyUSB0'  # fallback; auto-scan overrides this at runtime
 AHRS_BAUD = 9600
-CONTROL_PORT = '/dev/ttyS1' 
+CONTROL_PORT = '/dev/ttyS1'
 CONTROL_BAUD = 115200
+
+# Known RTL-SDR USB VID:PID pairs
+# RTL2832U: 0x0bda:0x2832  (generic)
+# RTL2832U + R820T: 0x0bda:0x2838
+# Nooelec, FlightAware, etc. share the same VID/PID
+RTLSDR_VIDPIDS = {
+    ("0bda", "2832"),
+    ("0bda", "2838"),
+    ("0bda", "2831"),
+    ("0bda", "2840"),
+}
+
+
+def find_rtlsdr_device():
+    """
+    Scan /sys/bus/usb/devices (Linux) for a connected RTL-SDR dongle by
+    matching well-known VID:PID pairs.  Returns the zero-based device index
+    that rtlsdr numbers them in the order they appear on the bus.
+
+    Falls back to index 0 if the sysfs path is not available (non-Linux)
+    or no dongle is found.
+    """
+    sysfs_root = "/sys/bus/usb/devices"
+    if not os.path.isdir(sysfs_root):
+        print("[RTL-SDR] /sys/bus/usb/devices not available; defaulting to device index 0")
+        return 0
+
+    rtl_index = 0
+    found = []
+    for dev_path in sorted(glob.glob(os.path.join(sysfs_root, "*"))):
+        vid_file = os.path.join(dev_path, "idVendor")
+        pid_file = os.path.join(dev_path, "idProduct")
+        if not (os.path.exists(vid_file) and os.path.exists(pid_file)):
+            continue
+        try:
+            vid = open(vid_file).read().strip().lower()
+            pid = open(pid_file).read().strip().lower()
+        except OSError:
+            continue
+        if (vid, pid) in RTLSDR_VIDPIDS:
+            found.append((dev_path, vid, pid))
+
+    if found:
+        print(f"[RTL-SDR] Found {len(found)} dongle(s) on USB bus:")
+        for i, (path, vid, pid) in enumerate(found):
+            print(f"  [{i}]  {os.path.basename(path)}  VID:{vid} PID:{pid}")
+        # Always use the first one found; extend to multi-dongle support later
+        return 0
+    else:
+        print("[RTL-SDR] No dongle detected via sysfs; defaulting to device index 0")
+        return 0
+
+
+def _rtlsdr_occupied_ports():
+    """
+    Return a set of /dev/ttyUSB* paths that are owned by RTL-SDR-class USB
+    devices.  RTL-SDR dongles present as *bulk-transfer* devices (no ttyUSB
+    node), so in practice this always returns an empty set.  The function
+    exists as a hook in case a composite dongle exposes a serial interface.
+    """
+    return set()
+
+
+def find_ahrs_port(baud=AHRS_BAUD, timeout=0.5):
+    """
+    Probe every available ttyUSB* (and ttyACM*) port for the WT901C AHRS
+    sensor by sending a Modbus RTU angle-register request and checking for a
+    valid 29-byte response.  Skips any port already used by the RTL-SDR.
+
+    Returns the device path string (e.g. '/dev/ttyUSB1') on success, or
+    falls back to AHRS_PORT if nothing responds.
+    """
+    occupied = _rtlsdr_occupied_ports()
+
+    # Gather candidate ports (ttyUSB* first, then ttyACM*)
+    candidates = sorted(
+        [p.device for p in serial.tools.list_ports.comports()
+         if "ttyUSB" in p.device or "ttyACM" in p.device]
+    )
+
+    if not candidates:
+        print(f"[AHRS Scan] No USB serial ports found; using fallback {AHRS_PORT}")
+        return AHRS_PORT
+
+    print(f"[AHRS Scan] Probing ports: {candidates}")
+
+    def _crc16(data):
+        crc = 0xFFFF
+        for byte in data:
+            crc ^= byte
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xA001
+                else:
+                    crc >>= 1
+        return struct.pack('<H', crc)
+
+    req = struct.pack('>BBHH', 0x50, 0x03, 0x0034, 12)
+    req += _crc16(req)
+
+    for port in candidates:
+        if port in occupied:
+            print(f"[AHRS Scan]   skip {port} (RTL-SDR occupied)")
+            continue
+        try:
+            with serial.Serial(port, baud, timeout=timeout) as ser:
+                ser.reset_input_buffer()
+                ser.write(req)
+                res = ser.read(29)
+            if len(res) == 29 and res[-2:] == _crc16(res[:-2]):
+                print(f"[AHRS Scan]   FOUND WT901C on {port}")
+                return port
+            else:
+                print(f"[AHRS Scan]   {port}: no valid response (got {len(res)} bytes)")
+        except Exception as exc:
+            print(f"[AHRS Scan]   {port}: error — {exc}")
+
+    print(f"[AHRS Scan] No AHRS found; falling back to {AHRS_PORT}")
+    return AHRS_PORT
 
 # --- UTILS & Math Models ---
 import math
@@ -433,9 +560,7 @@ class AutoPointing:
         return time.time()
 
     def _set_log(self, msg):
-        with state_lock:
-            if telemetry_state["log_message"] != msg:
-                telemetry_state["log_message"] = msg
+        system_log(msg)
 
     def _move_motor(self, cmd_dict):
         self.ctrl.update_command(cmd_dict)
@@ -587,7 +712,7 @@ class AutoPointing:
                     cmd["down"] = 1 if el_err < 0 else 0
 
                 self._move_motor(cmd)
-                self._set_log(
+                print(
                     f"Seek Az:{az_err:+.1f}deg El:{el_err:+.1f}deg | "
                     f"PWM az:{spd_az} el:{spd_el} | "
                     f"rate az:{self.ctrl_az.measured_rate:.1f} el:{self.ctrl_el.measured_rate:.1f} °/s"
@@ -749,12 +874,12 @@ class GPSReader:
         except: return None
 
     def _run(self):
-        print("[GPS] Starting on {}...".format(self.port))
+        system_log("[GPS] Starting on {}...".format(self.port))
         while self.running:
             ser = None
             try:
                 ser = serial.Serial(self.port, self.baud, timeout=1)
-                print("[GPS] Connected")
+                system_log("[GPS] Connected")
                 while self.running and ser.is_open:
                     try:
                         line = ser.readline().decode('utf-8', errors='ignore').strip()
@@ -804,10 +929,11 @@ class GPSReader:
 # --- CLASS: AHRS READER (Background Thread) ---
 class WT901CReader:
     def __init__(self, port=AHRS_PORT, baud=AHRS_BAUD):
-        self.port = port
+        self.port = port          # may be overridden by auto-scan at _run() time
         self.baud = baud
         self.running = False
         self.thread = None
+        self._auto_scan = True    # set False to pin a specific port
 
     def calculate_crc16(self, data):
         crc = 0xFFFF
@@ -819,12 +945,16 @@ class WT901CReader:
         return struct.pack('<H', crc)
 
     def _run(self):
-        print("[AHRS] Starting on {}...".format(self.port))
+        system_log("[AHRS] Starting (auto-scan enabled: {})...".format(self._auto_scan))
         while self.running:
             ser = None
+            # Auto-scan for the AHRS port on each reconnect attempt
+            if self._auto_scan:
+                self.port = find_ahrs_port(baud=self.baud)
             try:
+                system_log("[AHRS] Connecting to {}...".format(self.port))
                 ser = serial.Serial(self.port, self.baud, timeout=0.2)
-                print("[AHRS] Connected")
+                system_log("[AHRS] Connected on {}".format(self.port))
                 while self.running and ser.is_open:
                     try:
                         # Request Angle Data (0x50 slave ID hardcoded for now)
@@ -873,8 +1003,10 @@ class WT901CReader:
 
 # --- CLASS: CONTROL SENDER via SPI (Background Thread) ---
 # Sends 9 bytes to ESP32 SPI Slave: [SpdAz, SpdEl, SpdPol, Up, Dn, Rt, Lt, PRt, PLt]
+# --- CLASS: CONTROL SENDER via SPI (Background Thread) ---
+# Sends 9 bytes to ESP32 SPI Slave: [SpdAz, SpdEl, SpdPol, Up, Dn, Rt, Lt, PRt, PLt]
 class ControlSender:
-    def __init__(self, spi_bus=1, spi_device=1):
+    def __init__(self, spi_bus=0, spi_device=0):
         """
         SPI Configuration for Orange Pi Zero 3:
         - spi_bus: Usually 1 (check /dev/spidev*)
@@ -899,7 +1031,7 @@ class ControlSender:
                     self.state[k] = int(new_data[k])
 
     def _run(self):
-        print("[Control/SPI] Starting on /dev/spidev{}.{}...".format(self.spi_bus, self.spi_device))
+        system_log("[Control/SPI] Starting on /dev/spidev{}.{}...".format(self.spi_bus, self.spi_device))
         
         while self.running:
             spi = None
@@ -907,20 +1039,43 @@ class ControlSender:
                 import spidev
                 spi = spidev.SpiDev()
                 spi.open(self.spi_bus, self.spi_device)
-                spi.max_speed_hz = 1000000  # 1 MHz (adjust if needed)
+                spi.max_speed_hz = 115200  # 115200 Hz (matches requested speed)
                 spi.mode = 0  # SPI Mode 0 (matches ESP32 config)
-                print("[Control/SPI] Connected")
+                system_log("[Control/SPI] Connected to SPI bus, recalling ESP32...")
                 
+                # --- 1. RECALL / PING LOOP ---
+                # Traps the execution here, continuously recalling until the ESP32 wakes up and replies
+                ping_payload = [0] * 12
+                esp32_ready = False
+                
+                while self.running and not esp32_ready:
+                    try:
+                        response = spi.xfer2(ping_payload)
+                        resp_str = "".join([chr(c) for c in response if 32 <= c <= 126])
+                        if "ESP32_RDY" in resp_str:
+                            esp32_ready = True
+                            system_log("[Control/SPI] Verified connection with ESP32 Slave")
+                        else:
+                            time.sleep(0.5) # Wait half a second and recall again
+                    except Exception as e:
+                        time.sleep(0.5)
+
+                # Exit cleanly if thread is stopped during the ping loop
+                if not self.running:
+                    break
+
                 with state_lock: 
                     telemetry_state['sensor_status_encoder'] = True
 
-                while self.running:
-                    # 1. Get current command snapshot
+                missed_replies = 0
+
+                # --- 2. ACTIVE CONTROL LOOP ---
+                while self.running and esp32_ready:
+                    # Get current command snapshot
                     with self.lock:
                         cmd = self.state.copy()
                     
-                    # 2. Build 12-byte payload (matching ESP32 expectations + 32-bit DMA alignment)
-                    # Clamp values to 0-255 for bytes
+                    # Build 12-byte payload (matching ESP32 expectations + 32-bit DMA alignment)
                     payload = [
                         max(0, min(100, cmd['spd_azm'])),   # Byte 0: Speed Azimuth (0-100)
                         max(0, min(100, cmd['spd_elv'])),   # Byte 1: Speed Elevation (0-100)
@@ -934,14 +1089,30 @@ class ControlSender:
                         0, 0, 0                             # Bytes 9-11: Padding for ESP32 SPI Slave DMA
                     ]
                     
-                    # 3. Send via SPI
+                    # Send via SPI
                     try:
-                        spi.xfer2(payload)
+                        response = spi.xfer2(payload)
+                        
+                        # --- 3. CONNECTION MONITORING ---
+                        # In SPI, a disconnected slave usually results in floating high (0xFF) or pulled low (0x00)
+                        if all(b == 0 for b in response) or all(b == 255 for b in response):
+                            missed_replies += 1
+                        else:
+                            missed_replies = 0  # Reset counter on any valid data fluctuation
+                            
+                        # If ESP32 is unresponsive for ~1 second (20 ticks @ 50ms)
+                        if missed_replies > 20:
+                            system_log("[Control/SPI] Error: ESP32 stopped replying. Initiating recall...")
+                            with state_lock: 
+                                telemetry_state['sensor_status_encoder'] = False
+                            esp32_ready = False # Break inner loop to force the re-ping sequence
+                            break
+
                     except Exception as e:
                         print("[Control/SPI] Write Error: {}".format(e))
                         break
                     
-                    # 4. Limit Rate (~20Hz)
+                    # Limit Rate (~20Hz)
                     time.sleep(0.05)
 
             except ImportError:
@@ -1119,7 +1290,9 @@ class Beacon_Detector:
 def spectrum_worker(sid):
     try:
         from rtlsdr import RtlSdr
-        sdr = RtlSdr()
+        rtl_index = find_rtlsdr_device()
+        print(f"[RTL-SDR] Opening device index {rtl_index}")
+        sdr = RtlSdr(rtl_index)
         sdr.gain = 'auto'
         FFT_SIZE = 1024
         dvbs2_demod = DVBS2_Demodulator()

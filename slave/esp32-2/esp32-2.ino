@@ -18,15 +18,6 @@ const int POL_EN = 12;
 const int POL_R_PWM = 13;
 const int POL_L_PWM = 15;
 
-// ================= LIMIT SWITCH PINS =================
-// Active HIGH (Normally LOW)
-const int LIM_AZI_RIGHT = 35; // Motor A - Max (Needs 10k external Pull-down)
-const int LIM_AZI_LEFT  = 34; // Motor A - Min (Needs 10k external Pull-down)
-const int LIM_ELE_UP    = 39; // Motor B - Max (Needs 10k external Pull-down / VN)
-const int LIM_ELE_DOWN  = 36; // Motor B - Min (Needs 10k external Pull-down / VP)
-const int LIM_POL_RIGHT = 16; // Motor C - Max (Uses Internal Pull-down)
-const int LIM_POL_LEFT  = 17; // Motor C - Min (Uses Internal Pull-down)
-
 // SPI SLAVE PINS (VSPI Default)
 const int SPI_CS   = 5;
 const int SPI_CLK  = 18;
@@ -46,16 +37,6 @@ spi_slave_transaction_t t;
 void setup() {
     Serial.begin(115200);
     Serial.setTimeout(50);
-
-    // --- LIMIT SWITCH CONFIG ---
-    // Pins 34, 35, 36, and 39 are input only and do not have internal pullups/pulldowns on ESP32 (need external pull-downs)
-    pinMode(LIM_AZI_RIGHT, INPUT);
-    pinMode(LIM_AZI_LEFT,  INPUT);
-    pinMode(LIM_ELE_UP,    INPUT);
-    pinMode(LIM_ELE_DOWN,  INPUT);
-    // Pins 16 and 17 support internal pullups/pulldowns
-    pinMode(LIM_POL_RIGHT, INPUT_PULLDOWN);
-    pinMode(LIM_POL_LEFT,  INPUT_PULLDOWN);
 
     // --- MOTOR CONFIG ---
     pinMode(AZI_EN, OUTPUT); digitalWrite(AZI_EN, LOW);
@@ -204,13 +185,13 @@ void updateMotors(int s_az, int s_el, int s_pol, int up, int down, int right, in
     int pwm_el  = map(s_el, 0, 100, 0, 255);
     int pwm_pol = map(s_pol, 0, 100, 0, 255);
 
-    // --- 2. ELEVATION MOTOR LOGIC (Active HIGH Limit Switch) ---
-    if (up == 1 && down == 0 && digitalRead(LIM_ELE_UP) == LOW) {
+    // --- 2. ELEVATION MOTOR LOGIC ---
+    if (up == 1 && down == 0) {
         analogWrite(ELE_EN, pwm_el);
         digitalWrite(ELE_R_PWM, HIGH);
         digitalWrite(ELE_L_PWM, LOW);
     } 
-    else if (down == 1 && up == 0 && digitalRead(LIM_ELE_DOWN) == LOW) {
+    else if (down == 1 && up == 0) {
         analogWrite(ELE_EN, pwm_el);
         digitalWrite(ELE_R_PWM, LOW);
         digitalWrite(ELE_L_PWM, HIGH);
@@ -221,13 +202,13 @@ void updateMotors(int s_az, int s_el, int s_pol, int up, int down, int right, in
         digitalWrite(ELE_L_PWM, LOW);
     }
 
-    // --- 3. AZIMUTH MOTOR LOGIC (Active HIGH Limit Switch) ---
-    if (right == 1 && left == 0 && digitalRead(LIM_AZI_RIGHT) == LOW) {
+    // --- 3. AZIMUTH MOTOR LOGIC ---
+    if (right == 1 && left == 0) {
         analogWrite(AZI_EN, pwm_az);
         digitalWrite(AZI_R_PWM, HIGH);
         digitalWrite(AZI_L_PWM, LOW);
     } 
-    else if (left == 1 && right == 0 && digitalRead(LIM_AZI_LEFT) == LOW) {
+    else if (left == 1 && right == 0) {
         analogWrite(AZI_EN, pwm_az);
         digitalWrite(AZI_R_PWM, LOW);
         digitalWrite(AZI_L_PWM, HIGH);
@@ -238,13 +219,13 @@ void updateMotors(int s_az, int s_el, int s_pol, int up, int down, int right, in
         digitalWrite(AZI_L_PWM, LOW);
     }
 
-    // --- 4. POLARIZATION MOTOR LOGIC (Active HIGH Limit Switch) ---
-    if (p_right == 1 && p_left == 0 && digitalRead(LIM_POL_RIGHT) == LOW) {
+    // --- 4. POLARIZATION MOTOR LOGIC ---
+    if (p_right == 1 && p_left == 0) {
         analogWrite(POL_EN, pwm_pol);
         digitalWrite(POL_R_PWM, HIGH);
         digitalWrite(POL_L_PWM, LOW);
     } 
-    else if (p_left == 1 && p_right == 0 && digitalRead(LIM_POL_LEFT) == LOW) {
+    else if (p_left == 1 && p_right == 0) {
         analogWrite(POL_EN, pwm_pol);
         digitalWrite(POL_R_PWM, LOW);
         digitalWrite(POL_L_PWM, HIGH);

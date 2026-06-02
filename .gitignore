@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Arduino/ESP32 build and local configs
+build/
+.pio/
+*.local.properties
+
+# Custom ignores
+INSTRUCTIONS/
